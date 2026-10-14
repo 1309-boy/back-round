@@ -1,0 +1,10 @@
+import {build} from 'esbuild';
+import {mkdir,readFile,writeFile,cp} from 'node:fs/promises';
+await mkdir('dist/assets',{recursive:true});await mkdir('build',{recursive:true});
+await build({entryPoints:['src/app.ts'],outfile:'dist/assets/app.js',bundle:true,format:'iife',target:'es2022',minify:true,legalComments:'linked'});
+await build({entryPoints:['server/index.ts'],outfile:'build/server.mjs',bundle:true,platform:'node',format:'esm',target:'node22',packages:'external'});
+await cp('public/index.html','dist/index.html');await cp('public/config.js','dist/config.js');
+let html=await readFile('dist/index.html','utf8'),css=await readFile('dist/assets/app.css','utf8'),js=await readFile('dist/assets/app.js','utf8'),config=await readFile('dist/config.js','utf8');
+html=html.replace('<link rel="stylesheet" href="./assets/app.css">',()=>`<style>${css}</style>`).replace('<script src="./config.js"></script><script src="./assets/app.js"></script>',()=>`<script>${config}</script><script>${js.replace(/<\/script/gi,'<\\/script')}</script>`);
+await writeFile('dist/Back-round-beta.html',html);
+console.log('Built dist/ (static), dist/Back-round-beta.html (standalone), build/server.mjs (online server).');

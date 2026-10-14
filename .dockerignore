@@ -1,0 +1,8 @@
+node_modules
+.git
+data
+artifacts
+.env
+service-account*.json
+dist
+build

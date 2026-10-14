@@ -1,0 +1,8 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Profiles and match results are accessed through the authenticated game server.
+    // The Admin SDK verifies Google ID tokens and writes authoritative results.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

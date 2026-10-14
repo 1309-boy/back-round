@@ -1,0 +1,24 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {JSDOM,VirtualConsole} from 'jsdom';
+
+test('built UI opens all five empty cards, practice, abilities and the four-choice round flow',async()=>{
+  const html=await readFile('dist/index.html','utf8'),js=await readFile('dist/assets/app.js','utf8');const errors:any[]=[];const vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e));const dom=new JSDOM(html,{url:'https://backround.test/',runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:vc});const w:any=dom.window;
+  let raf:any=null,clock=0;w.requestAnimationFrame=(cb:any)=>{raf=cb;return 1;};w.cancelAnimationFrame=()=>{};w.BACKROUND_CONFIG={serverUrl:'',firebase:null};w.fetch=globalThis.fetch;w.TextEncoder=TextEncoder;w.TextDecoder=TextDecoder;w.structuredClone=structuredClone;
+  w.AudioContext=class {state='running';currentTime=0;destination={};resume(){return Promise.resolve();}createOscillator(){return{type:'',frequency:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},start(){},stop(){}};}createGain(){return{gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){}};}};
+  const context=new Proxy({canvas:{width:1280,height:760}},{get(target:any,key){return key in target?target[key]:(()=>{});},set(target:any,key,value){target[key]=value;return true;}});
+  w.HTMLCanvasElement.prototype.getContext=function(){return context;};w.HTMLCanvasElement.prototype.getBoundingClientRect=()=>({x:0,y:0,left:0,top:0,right:1280,bottom:760,width:1280,height:760});
+  const click=(action:string)=>{const el=w.document.querySelector(`[data-action="${action}"]`);assert.ok(el,`Missing ${action}`);el.click();};
+  const frames=(count=1)=>{for(let i=0;i<count;i++){clock+=1000/60;if(raf)raf(clock);}};
+  try{
+    w.eval(js);clock=w.performance.now();assert.equal(w.document.querySelectorAll('.menu-card').length,4);click('training');assert.equal(w.document.querySelectorAll('.character-card').length,5);for(const el of w.document.querySelectorAll('.portrait'))assert.equal(el.textContent,'');
+    for(const id of ['rian','bena','khan','sean','winston']){w.document.querySelector(`[data-action="pick"][data-id="${id}"]`).click();assert.equal(w.document.querySelectorAll('.skill-row').length,3);assert.equal(w.document.querySelectorAll('.character-card.selected').length,1);}
+    w.document.querySelector('[data-action="pick"][data-id="rian"]').click();click('practice-start');frames(2);assert.ok(w.document.querySelector('#game-canvas'));assert.match(w.document.querySelector('#loadout-name').textContent,/리안/);assert.equal(w.document.querySelector('#cd2-number').textContent,'READY');
+    w.dispatchEvent(new w.KeyboardEvent('keydown',{code:'Space',bubbles:true}));frames(2);assert.match(w.document.querySelector('#hud-stat').textContent,/ST 7\d/);w.dispatchEvent(new w.KeyboardEvent('keyup',{code:'Space'}));frames(20);
+    const canvas=w.document.querySelector('#game-canvas');canvas.dispatchEvent(new w.MouseEvent('pointerdown',{button:2,clientX:900,clientY:650,bubbles:true}));frames(1);assert.notEqual(w.document.querySelector('#cd2-number').textContent,'READY');assert.ok(parseFloat(w.document.querySelector('#cd2-fill').style.height)<10);w.dispatchEvent(new w.MouseEvent('pointerup',{button:2,bubbles:true}));
+    click('practice-ult');frames(1);assert.match(w.document.querySelector('#ult-value').textContent,/READY/);click('skills');assert.equal(w.document.querySelectorAll('#overlay .skill-row').length,3);click('close');
+    click('pause');click('leave');await new Promise(r=>setTimeout(r,0));click('match');click('bot-start');assert.equal(w.document.querySelectorAll('#overlay .character-card').length,5);click('confirm-choice');frames(190);assert.equal(w.document.querySelector('#overlay'),null);
+    click('pause');assert.equal(w.document.querySelectorAll('.hotkeys div').length,6);click('close');click('pause');click('leave');await new Promise(r=>setTimeout(r,0));click('profile');assert.equal(w.document.querySelectorAll('.character-card').length,5);click('account');const nickname=w.document.querySelector('#nickname');nickname.value='<script>test</script>';click('rename');await new Promise(r=>setTimeout(r,0));assert.equal(w.document.querySelectorAll('script').length,2);assert.ok(w.localStorage.getItem('backround.local.profile.v1'));assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
+  }finally{dom.window.close();}
+});
