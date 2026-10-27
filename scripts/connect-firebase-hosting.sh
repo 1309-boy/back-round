@@ -9,6 +9,32 @@ br_repo='1309-boy/back-round'
 br_service='github-hosting-deploy'
 br_account="${br_service}@${br_project}.iam.gserviceaccount.com"
 
+# IAM reads and policy writes can lag behind a successful account creation.
+# Retry only a service-account visibility error; permission/config errors stop.
+br_retry_account_visibility() {
+  local br_error br_status br_attempt br_delay
+  br_error=$(mktemp)
+  br_attempt=0
+  for br_delay in 5 10 20 30 30 30 0; do
+    if "$@" 2>"$br_error"; then
+      rm -f "$br_error"
+      return 0
+    else
+      br_status=$?
+    fi
+    br_attempt=$((br_attempt + 1))
+    if [[ "$br_delay" == 0 ]] ||
+       grep -Eiq 'PERMISSION_DENIED|UNAUTHENTICATED|access denied' "$br_error" ||
+       ! grep -Eiq 'service account.*(does not exist|not found)|NOT_FOUND.*service account|unknown service account' "$br_error"; then
+      cat "$br_error" >&2
+      rm -f "$br_error"
+      return "$br_status"
+    fi
+    printf 'Waiting for Google IAM to recognize the service account (%ss, attempt %s/7)...\n' "$br_delay" "$br_attempt" >&2
+    sleep "$br_delay"
+  done
+}
+
 for br_tool in gcloud gh python3; do
   command -v "$br_tool" >/dev/null || { echo "Required command not found: $br_tool" >&2; exit 1; }
 done
@@ -28,11 +54,15 @@ if [[ "$br_existing" == *'FIREBASE_SERVICE_ACCOUNT'* ]]; then
 fi
 
 if ! gcloud iam service-accounts describe "$br_account" --project "$br_project" >/dev/null 2>&1; then
-  gcloud iam service-accounts create "$br_service" --project "$br_project" \
-    --display-name='Back round GitHub Hosting deploy' --quiet
+  # Creation may report ALREADY_EXISTS if a recent account is not yet readable.
+  if ! gcloud iam service-accounts create "$br_service" --project "$br_project" \
+    --display-name='Back round GitHub Hosting deploy' --quiet; then
+    br_retry_account_visibility gcloud iam service-accounts describe "$br_account" --project "$br_project" >/dev/null
+  fi
 fi
+br_retry_account_visibility gcloud iam service-accounts describe "$br_account" --project "$br_project" >/dev/null
 for br_role in roles/firebasehosting.admin roles/serviceusage.apiKeysViewer; do
-  gcloud projects add-iam-policy-binding "$br_project" \
+  br_retry_account_visibility gcloud projects add-iam-policy-binding "$br_project" \
     --member="serviceAccount:${br_account}" --role="$br_role" --condition=None --quiet >/dev/null
 done
 
@@ -58,7 +88,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-gcloud iam service-accounts keys create "$br_key_file" --iam-account="$br_account" --project "$br_project" --quiet
+br_retry_account_visibility gcloud iam service-accounts keys create "$br_key_file" --iam-account="$br_account" --project "$br_project" --quiet
 # gh encrypts the file locally with GitHub's repository public key before upload.
 gh secret set FIREBASE_SERVICE_ACCOUNT --repo "$br_repo" < "$br_key_file"
 br_uploaded=1
