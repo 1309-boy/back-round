@@ -12,3 +12,19 @@
 .game.touch-mode .mobile-controls{display:flex;z-index:3;touch-action:none}.mobile-controls button{touch-action:none;min-width:48px;min-height:48px;user-select:none;-webkit-user-select:none}
 .touch-move-hint,.touch-aim-hint{display:none;position:absolute;bottom:90px;pointer-events:none;color:#a8c4d4aa;font-size:10px;letter-spacing:.5px}
 .touch-mode .touch-move-hint{display:block;left:22px}.touch-mode .touch-aim-hint{display:block;right:22px}.touch-mode .practice-tools{bottom:125px}.touch-mode .game-help{display:block;white-space:normal}
+
+/* Circular mobile skill sticks. Drag vectors are mapped from the player's world position. */
+.game.touch-mode .mobile-controls{display:block;width:240px;height:164px;right:max(16px,env(safe-area-inset-right));bottom:18px;padding:0}
+.mobile-controls button{position:absolute;border-radius:50%;padding:0;display:grid;place-items:center;box-shadow:0 4px 18px #0008;outline-offset:4px;-webkit-touch-callout:none}
+.mobile-controls .touch-dash{left:0;bottom:0;width:54px;height:54px;background:#1a2939f2;border:2px solid #8ca4b8;color:#d8e8f4;font-size:10px}
+.mobile-controls .touch-skill-one{right:16px;bottom:0;width:78px;height:78px;background:#154d7df2;border:2px solid #76c7ff}
+.mobile-controls .touch-skill-two{left:52px;top:0;width:66px;height:66px;background:#234f6df2;border:2px solid #89d5ff}
+.mobile-controls .touch-ultimate{right:0;top:0;width:60px;height:60px;background:#665222f2;border:2px solid #f1d274;color:#fff0b6}
+.touch-knob{width:76%;height:76%;border-radius:50%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;background:#ffffff12;pointer-events:none}
+.touch-knob b{font:700 23px ui-monospace,monospace}.touch-knob small{font-size:9px}.touch-ultimate .touch-knob b{font-size:22px}
+.mobile-controls .aim-active{box-shadow:0 0 0 13px #57b7ff22,0 0 30px #258fff33;border-color:#c8edff;z-index:2}.mobile-controls .aim-cancelled{border-color:#ff8585;background:#682e3c}
+.touch-aim-preview{display:none;position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;color:#74c9ff}.touch-mode.aiming .touch-aim-preview{display:block}.touch-aim-preview line{stroke:currentColor;stroke-width:3;stroke-dasharray:10 7}.touch-aim-preview circle{stroke:currentColor;stroke-width:3;fill:#4bafff22}.touch-aim-preview #touch-aim-origin{fill:currentColor}
+.touch-aim-status{display:none;position:absolute;bottom:190px;right:18px;z-index:3;color:#b2defa;font-size:11px;background:#102334df;padding:8px 12px;border:1px solid #416a87;border-radius:20px;pointer-events:none}
+.touch-mode.aiming .touch-aim-status{display:block}.aim-cancelled .touch-aim-preview{color:#ff8585}.aim-cancelled .touch-aim-status{color:#ffb4b4;border-color:#b35b67}
+.touch-mode .touch-aim-hint{bottom:192px;right:18px;max-width:225px;text-align:right}.touch-mode.aiming .touch-aim-hint{display:none}.touch-mode .touch-move-hint{bottom:40px}.touch-mode .practice-tools{bottom:86px;max-width:220px}
+@media(max-width:760px){.game.touch-mode .mobile-controls{transform:scale(.9);transform-origin:bottom right;right:10px;bottom:12px}.touch-mode .touch-aim-hint{bottom:170px;font-size:9px}.touch-aim-status{bottom:170px;font-size:10px}.touch-mode .practice-tools{max-width:145px;bottom:70px}}
