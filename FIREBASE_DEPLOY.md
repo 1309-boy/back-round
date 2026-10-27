@@ -16,7 +16,7 @@ firebase hosting:sites:create SITE_ID --project PROJECT_ID
 
 ## 2. 배포용 서비스 계정 키 준비
 
-Google Cloud 콘솔 → **IAM 및 관리자 → 서비스 계정**에서 해당 Firebase 프로젝트를 선택하고 배포용 계정을 만듭니다. 이 live 정적 사이트 배포에는 **Firebase Hosting Admin** 및 **API Keys Viewer** 역할을 부여합니다. 해당 계정 → 키 → 키 추가 → 새 키 만들기 → JSON으로 키를 받습니다.
+Google Cloud 콘솔 → **IAM 및 관리자 → 서비스 계정**에서 해당 Firebase 프로젝트를 선택하고 배포용 계정을 만듭니다. 이 live 정적 사이트 배포에는 **Firebase Hosting Admin**, **API Keys Viewer**, **Service Usage Viewer** 역할을 부여합니다. 해당 계정 → 키 → 키 추가 → 새 키 만들기 → JSON으로 키를 받습니다.
 
 키 JSON은 GitHub 저장소 파일이나 `public/config.js`에 넣지 않고 다음 단계의 **Actions Secret**으로 등록합니다. 기존 게임 서버용 Admin SDK 계정을 그대로 쓴다면 Hosting 배포에 필요한 역할도 갖고 있어야 합니다.
 
@@ -40,7 +40,7 @@ Google Cloud 콘솔 → **IAM 및 관리자 → 서비스 계정**에서 해당 
 - 설정을 추가·수정하는 것만으로 실행되지는 않습니다. **Run workflow**를 누르거나 새 커밋을 푸시하세요.
 - 배포 성공 시 Actions Summary 및 Deploy live site 로그에서 공개 주소를 확인할 수 있습니다.
 - `Site not found`라면 사이트를 먼저 생성했는지, 사이트 ID와 프로젝트가 맞는지 확인합니다.
-- 권한 오류라면 위 서비스 계정의 역할과 키를 확인합니다.
+- 권한 오류라면 위 서비스 계정의 역할과 키를 확인합니다. `serviceusage.services.get` 오류에는 **Service Usage Viewer** 역할이 필요합니다. 키를 다시 발급할 필요는 없습니다.
 
 ## 5. 구글 로그인·온라인 대전 연결
 

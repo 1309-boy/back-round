@@ -46,12 +46,6 @@ gcloud projects describe "$br_project" --format='value(projectId)' >/dev/null
 
 # A rerun never replaces a previously registered deployment credential.
 br_existing=$(gh secret list --repo "$br_repo" --json name --jq '.[].name')
-if [[ "$br_existing" == *'FIREBASE_SERVICE_ACCOUNT'* ]]; then
-  if printf '%s\n' "$br_existing" | python3 -c 'import sys; sys.exit(0 if "FIREBASE_SERVICE_ACCOUNT" in sys.stdin.read().splitlines() else 1)'; then
-    echo 'FIREBASE_SERVICE_ACCOUNT already exists; no new key was created.'
-    exit 0
-  fi
-fi
 
 if ! gcloud iam service-accounts describe "$br_account" --project "$br_project" >/dev/null 2>&1; then
   # Creation may report ALREADY_EXISTS if a recent account is not yet readable.
@@ -61,10 +55,18 @@ if ! gcloud iam service-accounts describe "$br_account" --project "$br_project" 
   fi
 fi
 br_retry_account_visibility gcloud iam service-accounts describe "$br_account" --project "$br_project" >/dev/null
-for br_role in roles/firebasehosting.admin roles/serviceusage.apiKeysViewer; do
+for br_role in roles/firebasehosting.admin roles/serviceusage.apiKeysViewer roles/serviceusage.serviceUsageViewer; do
   br_retry_account_visibility gcloud projects add-iam-policy-binding "$br_project" \
     --member="serviceAccount:${br_account}" --role="$br_role" --condition=None --quiet >/dev/null
 done
+
+# Refresh required roles before returning, even when a deployment Secret exists.
+if [[ "$br_existing" == *'FIREBASE_SERVICE_ACCOUNT'* ]]; then
+  if printf '%s\n' "$br_existing" | python3 -c 'import sys; sys.exit(0 if "FIREBASE_SERVICE_ACCOUNT" in sys.stdin.read().splitlines() else 1)'; then
+    echo 'FIREBASE_SERVICE_ACCOUNT already exists; no new key was created.'
+    exit 0
+  fi
+fi
 
 br_temp_dir=$(mktemp -d)
 br_key_file="$br_temp_dir/key.json"
