@@ -1,6 +1,6 @@
 // Public web configuration only. Never put a service-account key here.
 window.BACKROUND_CONFIG = {
-  serverUrl: "",
+  serverUrl: "https://back-round-server.onrender.com",
   firebase: {
     apiKey: "AIzaSyDRmt94FnNdHmtS0zGtTTYmo_QGDSjpXlo",
     authDomain: "back-round.firebaseapp.com",
