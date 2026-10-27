@@ -29,21 +29,18 @@ npm start
 
 서버 구조는 Colyseus의 방 관리·재접속을 사용하고, 한 서버 프로세스가 여러 개의 2인 방을 운영합니다. 여러 서버 프로세스로 확장하는 설정은 이 베타에 포함하지 않았습니다. `Dockerfile`도 포함되어 있습니다.
 
-## GitHub Pages 배포
+## GitHub → Firebase Hosting 자동 배포
 
-1. 이 폴더의 내용을 GitHub 저장소에 올립니다. `node_modules`, 서비스 계정 키, `.env`, `data`는 올리지 않습니다.
-2. 저장소 **Settings → Pages → Source**를 **GitHub Actions**로 선택합니다.
-3. `main` 브랜치에 변경을 올리면 `.github/workflows/pages.yml`이 검사·빌드 후 `dist`를 배포합니다.
-4. 게임 서버를 배포한 뒤 `public/config.js`의 `serverUrl`을 수정해 다시 배포합니다.
+`main`에 변경을 올리면 `.github/workflows/firebase-hosting.yml`이 검사·빌드·테스트 후 Firebase Hosting에 배포합니다. 프로젝트와 사이트를 만들고 GitHub Actions에 프로젝트 ID·사이트 ID·서비스 계정 Secret을 한 번 등록해야 합니다.
 
-HTML의 경로는 상대 경로이므로 `사용자.github.io/저장소명/` 형태를 지원합니다. 빌드 결과를 직접 올리는 경우에는 `dist`의 파일을 사용하세요.
+설정과 첫 배포 순서는 [FIREBASE_DEPLOY.md](FIREBASE_DEPLOY.md)를 참고하세요. 설정이 없으면 빌드·테스트만 진행하고 배포 대기 사유를 Actions Summary에 표시합니다.
 
 ## 구글 로그인과 계정 저장 연결
 
 Firebase 프로젝트의 실제 설정은 포함되어 있지 않습니다. 코드에 로그인과 서버 저장을 구현했지만, 공개 Firebase 프로젝트에 연결한 실사용 인증 테스트는 아직 하지 않았습니다.
 
 1. Firebase에서 Authentication의 **Google** 공급자를 켭니다.
-2. 승인된 도메인에 GitHub Pages의 호스트, 게임 서버 도메인, 필요하면 `localhost`를 추가합니다.
+2. 승인된 도메인에 실제 Firebase Hosting 도메인, 게임 서버 도메인, 필요하면 `localhost`를 추가합니다.
 3. Firestore 데이터베이스를 생성합니다.
 4. `public/config.js`의 `firebase`에 콘솔의 **웹 앱 설정**을 넣습니다.
 
@@ -69,9 +66,9 @@ window.BACKROUND_CONFIG = {
 
 구글 로그인을 연결하지 않은 로컬 서버는 게스트를 지원합니다. 게스트 기록은 서버의 `data/`에 저장합니다. 재시작 후에도 세션을 유지하려면 고정된 `SESSION_SECRET`, 기록을 보존하려면 영구 저장 볼륨을 설정하세요. 오프라인 AI 연습 기록은 별도의 브라우저 기록이며 구글 계정으로 업로드되지 않습니다.
 
-## Firebase Hosting으로 이전
+## Firebase Hosting과 대전 서버
 
-`firebase.json`의 `hosting.public`은 `dist`로 설정되어 있습니다. Firebase 프로젝트와 Hosting 사이트를 준비한 후 `npm run build` 및 `firebase deploy --only hosting`으로 화면을 배포합니다. 대전 서버는 같은 서버를 계속 사용할 수 있습니다. 새 도메인을 Firebase Auth 승인 도메인과 서버의 `CORS_ORIGINS`에 추가합니다.
+Firebase Hosting에는 `dist`의 웹 화면을 자동 배포합니다. Node.js/WebSocket 대전 서버는 별도 호스팅에서 실행합니다. 서버의 `CORS_ORIGINS`와 Firebase Authentication 승인 도메인에 실제 Hosting 주소를 추가하세요. 자세한 연결 방법은 [FIREBASE_DEPLOY.md](FIREBASE_DEPLOY.md)를 참고하세요.
 
 ## 조작과 표시
 
@@ -116,4 +113,5 @@ npm test
 
 `npm test`는 먼저 빌드합니다. 전투 규칙 테스트, 실제 로컬 WebSocket 클라이언트 두 개를 사용하는 온라인 테스트, DOM 환경의 메뉴·조작 테스트가 포함되어 있습니다. 게임 화면 렌더링도 별도로 검토했습니다. 이번 실행 환경에서는 실제 브라우저의 화면 크기별 시각 검증을 수행하지 못했습니다.
 
-실제 유저 간 네트워크 지연, 구글 로그인, 공개 서버 배포 후의 접속 환경과 장기 밸런스는 추가 플레이 테스트 대상입니다. 이 압축 파일을 제공하는 시점에 GitHub Pages/Firebase/게임 서버의 공개 배포를 수행한 상태는 아닙니다.
+실제 유저 간 네트워크 지연, 구글 로그인, 공개 서버 배포 후의 접속 환경과 장기 밸런스는 추가 플레이 테스트 대상입니다. Firebase Hosting의 실제 배포 여부는 Actions의 Deploy live site 결과로 확인하세요. 워크플로 파일이 있다는 것만으로 Firebase 프로젝트·인증·대전 서버 연결이 완료된 것은 아닙니다.
+

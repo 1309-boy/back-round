@@ -1,0 +1,96 @@
+name: Deploy Back round to Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-hosting-live
+  cancel-in-progress: false
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      # npm test also builds dist/ before running the test suite.
+      - run: npm test
+
+      - name: Prepare Firebase deployment
+        id: firebase
+        env:
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          FIREBASE_HOSTING_SITE: ${{ vars.FIREBASE_HOSTING_SITE }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
+          const required = ['FIREBASE_PROJECT_ID', 'FIREBASE_HOSTING_SITE', 'FIREBASE_SERVICE_ACCOUNT'];
+          const missing = required.filter(key => !process.env[key]?.trim());
+          if (missing.length) {
+            appendFileSync(process.env.GITHUB_OUTPUT, 'ready=false\n');
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              '## Firebase Hosting: setup required\n\nBuild and tests passed, but **no Firebase deployment was made**.\n\n' +
+              'Missing repository settings: ' + missing.map(key => '`' + key + '`').join(', ') +
+              '\n\nFollow [FIREBASE_DEPLOY.md](https://github.com/1309-boy/back-round/blob/main/FIREBASE_DEPLOY.md), then run this workflow again.\n');
+            console.log('::notice::Firebase deployment is waiting for repository settings: ' + missing.join(', '));
+            process.exit(0);
+          }
+          const projectId = process.env.FIREBASE_PROJECT_ID.trim();
+          const siteId = process.env.FIREBASE_HOSTING_SITE.trim();
+          if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(projectId)) {
+            throw new Error('FIREBASE_PROJECT_ID must be the Firebase project ID, not its display name.');
+          }
+          if (!/^[a-z0-9](?:[a-z0-9-]{0,28}[a-z0-9])?$/.test(siteId)) {
+            throw new Error('FIREBASE_HOSTING_SITE must be the site ID, without https:// or .web.app.');
+          }
+          let account;
+          try { account = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT); }
+          catch { throw new Error('FIREBASE_SERVICE_ACCOUNT must contain the complete service-account JSON.'); }
+          if (account.type !== 'service_account' || !account.client_email || !account.private_key) {
+            throw new Error('FIREBASE_SERVICE_ACCOUNT is not a service-account JSON key.');
+          }
+          if (account.project_id !== projectId) {
+            throw new Error('The service-account key and FIREBASE_PROJECT_ID belong to different projects.');
+          }
+          const config = JSON.parse(readFileSync('firebase.json', 'utf8'));
+          config.hosting.target = 'back-round';
+          delete config.hosting.site;
+          writeFileSync('firebase.json', JSON.stringify(config, null, 2) + '\n');
+          writeFileSync('.firebaserc', JSON.stringify({
+            projects: { default: projectId },
+            targets: { [projectId]: { hosting: { 'back-round': [siteId] } } }
+          }, null, 2) + '\n');
+          appendFileSync(process.env.GITHUB_OUTPUT, 'ready=true\n');
+          NODE
+
+      - name: Deploy live site
+        if: steps.firebase.outputs.ready == 'true'
+        id: deployment
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          target: back-round
+          channelId: live
+
+      - name: Report deployment
+        if: steps.deployment.outcome == 'success'
+        env:
+          DEPLOYED_URL: ${{ steps.deployment.outputs.details_url }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            '## Firebase Hosting deployed\n\n' + (process.env.DEPLOYED_URL || 'See the Deploy live site step for the published URL.') + '\n');
+          NODE
