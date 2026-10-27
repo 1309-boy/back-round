@@ -1,7 +1,8 @@
 import { randomBytes,createHmac,timingSafeEqual } from 'node:crypto';
 import { mkdir,readFile,writeFile,rename } from 'node:fs/promises';
 import path from 'node:path';
-import { initializeApp,applicationDefault,cert,getApps } from 'firebase-admin/app';
+import { initializeApp,applicationDefault,getApps } from 'firebase-admin/app';
+import { credentialFromJson } from './credentials.ts';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { BALANCE,IDS } from '../shared/data.ts';
@@ -15,7 +16,7 @@ export function applyResult(profile:any,result:any,index:number){const out=compl
 export class Profiles {
   firebase:boolean; secret:string; memory=new Map<string,any>(); saved=new Set<string>(); dataDir:string; queue:Promise<any>=Promise.resolve();
   constructor(){this.firebase=!!process.env.FIREBASE_PROJECT_ID;this.secret=process.env.SESSION_SECRET||randomBytes(32).toString('hex');this.dataDir=process.env.DATA_DIR||path.resolve('data');
-    if(this.firebase&&!getApps().length){let credential=applicationDefault();if(process.env.FIREBASE_ADMIN_JSON){try{const value=JSON.parse(process.env.FIREBASE_ADMIN_JSON);if(value.project_id!==process.env.FIREBASE_PROJECT_ID)throw new Error();credential=cert(value);}catch{throw new Error('FIREBASE_ADMIN_JSON 설정 또는 프로젝트 ID를 확인해주세요.');}}initializeApp({credential,projectId:process.env.FIREBASE_PROJECT_ID});}
+    if(this.firebase&&!getApps().length){const credential=process.env.FIREBASE_ADMIN_JSON?credentialFromJson(process.env.FIREBASE_ADMIN_JSON,process.env.FIREBASE_PROJECT_ID!):applicationDefault();initializeApp({credential,projectId:process.env.FIREBASE_PROJECT_ID});}
   }
   get guestAllowed(){return process.env.ALLOW_GUEST==='1'||(!this.firebase&&process.env.ALLOW_GUEST!=='0');}
   sign(payload:string){return createHmac('sha256',this.secret).update(payload).digest('base64url');}
