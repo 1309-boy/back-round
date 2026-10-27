@@ -12,9 +12,16 @@ export function drawArena(ctx:any,s:any,me=0,options:any={}){
     if(a.kind==='sector'){const angle=Math.atan2(a.dy,a.dx);ctx.moveTo(a.x,a.y);ctx.arc(a.x,a.y,a.radius,angle-a.angle,angle+a.angle);ctx.closePath();}
     else if(a.kind==='circle'){ctx.arc(a.x,a.y,a.radius,0,Math.PI*2);}
     else{const dx=a.end.x-a.x,dy=a.end.y-a.y,len=Math.hypot(dx,dy)||1,px=-dy/len*a.width/2,py=dx/len*a.width/2;ctx.moveTo(a.x+px,a.y+py);ctx.lineTo(a.end.x+px,a.end.y+py);ctx.lineTo(a.end.x-px,a.end.y-py);ctx.lineTo(a.x-px,a.y-py);ctx.closePath();}ctx.fill();ctx.stroke();}
-  for(const a of s.attacks)shape(a,.12+.16*(1-clamp(a.windup/a.total,0,1)));
+  if(options.rianAim){const a=options.rianAim,p=a.origin,angle=Math.atan2(a.direction.y,a.direction.x),radius=78;
+    ctx.fillStyle='rgba(80,168,255,.18)';ctx.strokeStyle='rgba(135,199,255,.7)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.arc(p.x,p.y,radius,angle-Math.PI/4,angle+Math.PI/4);ctx.closePath();ctx.fill();
+    ctx.beginPath();for(const sign of [-1,1]){ctx.moveTo(p.x-radius*.707,p.y-sign*radius*.707);ctx.lineTo(p.x+radius*.707,p.y+sign*radius*.707);}ctx.stroke();
+    if(a.kind==='pull'){ctx.strokeStyle=a.blocked?'#ff626d':'#72efb2';ctx.lineWidth=3;ctx.setLineDash([7,7]);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(a.end.x,a.end.y);ctx.stroke();ctx.setLineDash([]);}
+    else{ctx.strokeStyle='rgba(80,168,255,.2)';ctx.lineWidth=R*2;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(a.end.x,a.end.y);ctx.stroke();ctx.strokeStyle='rgba(120,198,255,.8)';ctx.lineWidth=1.5;ctx.stroke();ctx.beginPath();ctx.arc(a.end.x,a.end.y,R,0,Math.PI*2);ctx.stroke();}
+  }
+  for(const a of s.attacks)shape(a.followOwner?{...a,x:s.players[a.owner].x,y:s.players[a.owner].y}:a,.12+.16*(1-clamp(a.windup/a.total,0,1)));
   for(const b of s.bombs){if(b.fuse<=.8)shape({...b,kind:'circle'},.15+(.8-b.fuse)*.17);ctx.fillStyle='#191e25';ctx.strokeStyle=attackColor(b.owner);ctx.lineWidth=2;ctx.beginPath();ctx.arc(b.x,b.y,11,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle=attackColor(b.owner);ctx.fillRect(b.x-3,b.y-3,6,6);ctx.font='bold 12px monospace';ctx.textAlign='center';ctx.fillText(b.fuse.toFixed(1),b.x,b.y-19);}
-  for(const link of s.links)for(const line of link.lines){if(link.windup>0){shape({...line,owner:link.owner,width:20});}else{ctx.strokeStyle=link.ultimate?'#f3d66c':attackColor(link.owner);ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(line.x,line.y);ctx.lineTo(line.end.x,line.end.y);ctx.stroke();ctx.strokeStyle=rgba(link.owner,.12);ctx.lineWidth=15;ctx.stroke();}}
+  for(const link of s.links)for(const line of link.lines){if(link.windup>0){shape({...line,owner:link.owner});}else{ctx.strokeStyle=link.ultimate?'#f3d66c':attackColor(link.owner);ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(line.x,line.y);ctx.lineTo(line.end.x,line.end.y);ctx.stroke();ctx.strokeStyle=rgba(link.owner,.12);ctx.lineWidth=line.width;ctx.stroke();}}
   for(const d of s.discs){ctx.fillStyle=d.ultimate?'#f5d75e':attackColor(d.owner);ctx.beginPath();ctx.arc(d.x,d.y,5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#0b1117';ctx.lineWidth=2;ctx.stroke();}
   for(const p of s.players)if(p.grapple){const g=p.grapple;ctx.strokeStyle=local(p.id)?'#99d9fc':'#ffafb3';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(g.x,g.y);ctx.stroke();ctx.fillStyle=ctx.strokeStyle;ctx.fillRect(g.x-3,g.y-3,6,6);}
   for(const b of s.projectiles){ctx.strokeStyle=attackColor(b.owner);ctx.lineWidth=4;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(b.x-b.dx*15,b.y-b.dy*15);ctx.lineTo(b.x,b.y);ctx.stroke();}
@@ -34,6 +41,7 @@ export function drawArena(ctx:any,s:any,me=0,options:any={}){
     ctx.fillStyle='#080c11';ctx.fillRect(bx-1,by+9,58,5);ctx.fillStyle='#639ed6';ctx.fillRect(bx,by+10,56*clamp(p.stamina/100,0,1),3);ctx.globalAlpha=1;
   }
   for(const e of s.effects){const alpha=clamp(e.life*3,0,1);ctx.globalAlpha=alpha;
+    if(e.kind==='contact'){ctx.fillStyle=rgba(e.owner,.1);ctx.strokeStyle=attackColor(e.owner);ctx.lineWidth=2;ctx.beginPath();ctx.arc(e.x,e.y,e.radius,0,Math.PI*2);ctx.fill();ctx.stroke();}
     if(e.kind==='hit'){ctx.fillStyle='#fff';ctx.font='bold 17px monospace';ctx.textAlign='center';ctx.fillText(String(e.amount),e.x,e.y-36-(.5-e.life)*35);ctx.strokeStyle=attackColor(e.owner);ctx.lineWidth=2;for(let j=0;j<6;j++){const a=j/6*Math.PI*2,r=19+(.5-e.life)*24;ctx.beginPath();ctx.moveTo(e.x+Math.cos(a)*r,e.y+Math.sin(a)*r);ctx.lineTo(e.x+Math.cos(a)*(r+7),e.y+Math.sin(a)*(r+7));ctx.stroke();}}
     if(e.kind==='slash'){ctx.strokeStyle=attackColor(e.owner);ctx.lineWidth=3;const a=Math.atan2(e.dy,e.dx);ctx.beginPath();ctx.arc(e.x,e.y,e.radius*.8,a-e.angle,a+e.angle);ctx.stroke();}
     if(e.kind==='explosion'){ctx.fillStyle=rgba(e.owner,.13);ctx.strokeStyle=attackColor(e.owner);ctx.lineWidth=3;ctx.beginPath();ctx.arc(e.x,e.y,e.radius*(1-e.life*.5),0,Math.PI*2);ctx.fill();ctx.stroke();}
@@ -48,3 +56,4 @@ export function drawArena(ctx:any,s:any,me=0,options:any={}){
   if(options.crosshair){const{x,y}=options.crosshair;ctx.strokeStyle='#d5e4ef';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x-7,y);ctx.lineTo(x-3,y);ctx.moveTo(x+3,y);ctx.lineTo(x+7,y);ctx.moveTo(x,y-7);ctx.lineTo(x,y-3);ctx.moveTo(x,y+3);ctx.lineTo(x,y+7);ctx.stroke();}
   ctx.restore();
 }
+

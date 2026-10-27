@@ -15,7 +15,7 @@ export class Engine {
     if(this.practice){this.state.phase='fight';this.state.players.forEach((p:any)=>p.selected=true);this.recordHistory(true);}
   }
   id(){return this.nextId++;}
-  makePlayer(i:number,character:CharacterId,bonus:any){const c=CHARACTERS[character];return {id:i,character,name:c.name,x:i===0?170:1110,y:380,angle:i===0?0:Math.PI,hp:c.hp*(1+(bonus.hp||0)),maxHp:c.hp*(1+(bonus.hp||0)),speed:c.speed*(1+Math.min(.06,bonus.speed||0)),stamina:100,ult:0,cd1:0,cd2:0,cd2Max:c.cd2,charge:0,regenWait:5,staminaClock:0,stun:0,invulnerable:0,dash:0,dashDir:{x:1,y:0},motion:null,grapple:null,held2:false,selected:false,bonus:copy(bonus),lastDamage:0,discGroup:null,burst:null,localTime:0};}
+  makePlayer(i:number,character:CharacterId,bonus:any){const c=CHARACTERS[character];return {id:i,character,name:c.name,x:i===0?170:1110,y:380,angle:i===0?0:Math.PI,hp:c.hp*(1+(bonus.hp||0)),maxHp:c.hp*(1+(bonus.hp||0)),speed:c.speed*(1+Math.min(.06,bonus.speed||0)),stamina:100,ult:0,cd1:0,cd2:0,dashCd:0,cd2Max:c.cd2,charge:0,regenWait:5,staminaClock:0,stun:0,invulnerable:0,dash:0,dashDir:{x:1,y:0},motion:null,grapple:null,held2:false,selected:false,bonus:copy(bonus),lastDamage:0,discGroup:null,burst:null,localTime:0};}
   get walls(){return MAPS[this.state.mapIndex].walls;}
   get glass(){return this.state.barriers.filter((g:any)=>!g.dead);}
   frozen(i:number){return !!this.state.stop&&this.state.stop.owner!==i;}
@@ -42,8 +42,8 @@ export class Engine {
     if(action==='ult'&&p.character==='bena'){const bomb=s.bombs.find((b:any)=>b.owner===i);if(bomb){bomb.fuse=Math.min(.8,bomb.fuse);return true;}}
     if(p.dash>0)return false;
     if(action==='dash'){
-      if(p.stamina<B.dashCost)return false;
-      p.stamina-=B.dashCost;p.dash=B.dashDuration;p.invulnerable=B.dashDuration+B.dashAfterInvulnerability;
+      if(p.stamina<B.dashCost||p.dashCd>1e-9)return false;
+      p.stamina-=B.dashCost;p.dashCd=B.dashCooldown;p.dash=B.dashDuration;p.invulnerable=B.dashDuration+B.dashAfterInvulnerability;
       const input=this.inputs[i];p.dashDir=(input.x||input.y)?toward({x:0,y:0},input):this.aimDir(p);p.grapple=null;
       this.effect('dash',p.x,p.y,{owner:i,dx:p.dashDir.x,dy:p.dashDir.y});return true;
     }
@@ -66,9 +66,9 @@ export class Engine {
     if(p.character==='sean'){this.launchDisc(p,false);return;}
     p.cd1=c.cd1;
     const a:any={id:this.id(),owner:p.id,x:p.x,y:p.y,dx:d.x,dy:d.y,windup:c.windup,total:c.windup,damage:c.damage*this.multiplier(p),ultimate:false};
-    if(p.character==='rian'||p.character==='khan'){a.kind='sector';a.radius=c.range;a.angle=p.character==='rian'?1:.86;a.type='melee';if(p.character==='rian'){a.damage+=(p.charge/10)*26*this.multiplier(p);p.charge=0;}}
+    if(p.character==='rian'||p.character==='khan'){a.kind='sector';a.radius=c.range;a.angle=p.character==='rian'?1:.86;a.type='melee';a.followOwner=true;if(p.character==='rian'){a.damage+=(p.charge/10)*26*this.multiplier(p);p.charge=0;}}
     if(p.character==='bena'){a.kind='line';a.width=10;a.end=this.attackRayEnd(p,d,c.range,true);a.type='bullet';}
-    if(p.character==='winston'){a.kind='line';a.width=108;a.end=this.attackRayEnd(p,d,330,false);a.type='wall';a.barrier=this.newMovingWall(p,false,d);}
+    if(p.character==='winston'){a.kind='line';a.width=108;a.end=this.attackRayEnd(p,d,c.range,false);a.type='wall';a.barrier=this.newMovingWall(p,false,d);}
     this.state.attacks.push(a);
   }
   skill2(p:any){const q=this.enemy(p),aim=this.aim(p),d=this.aimDir(p),c=CHARACTERS[p.character as CharacterId];
@@ -91,6 +91,7 @@ export class Engine {
     }
     if(p.character==='khan'){
       if(this.state.stop){p.cd2=0;return false;}
+      this.effect('contact',p.x,p.y,{owner:p.id,radius:B.stopContact,life:.65});
       if(q.invulnerable>0){this.dodge(q,`stop-${this.id()}`);return true;}
       this.frozenView=copy(this.state);this.state.stop={owner:p.id,remaining:5,canAttack:distance(p,q)<=B.stopContact};
       this.effect('stop',p.x,p.y,{owner:p.id,life:.5});
@@ -106,7 +107,6 @@ export class Engine {
   }
   ultimate(p:any){const s=this.state,q=this.enemy(p),d=this.aimDir(p);
     if(p.character==='rian'){
-      if(q.invulnerable>0){this.dodge(q,`gravity-${this.id()}`);return;}
       const dir=cardinal(q,this.aim(p));const end=this.motionEnd(q,dir,true);this.force(q,end,.1);this.effect('gravity',q.x,q.y,{end,owner:p.id,life:.3});
     }
     if(p.character==='bena')s.bombs.push({id:this.id(),owner:p.id,x:p.x,y:p.y,fuse:10,radius:180,damage:92*this.multiplier(p)});
@@ -116,7 +116,7 @@ export class Engine {
       const a={id:this.id(),owner:p.id,x:p.x,y:p.y,dx:d.x,dy:d.y,kind:'line',width:250,end:this.attackRayEnd(p,d,680,false),windup:.25,total:.25,type:'wall',ultimate:true,damage:48*this.multiplier(p),barrier:this.newMovingWall(p,true,d)};s.attacks.push(a);
     }
   }
-  newMovingWall(p:any,ultimate:boolean,d:any){const g={id:this.id(),owner:p.id,x:p.x+d.x*42,y:p.y+d.y*42,dx:d.x,dy:d.y,width:ultimate?250:108,thickness:10,life:3,hp:9999,kind:'moving',active:false,ultimate,damage:(ultimate?48:23)*this.multiplier(p),travel:0,maxTravel:ultimate?680:330,speed:ultimate?570:480,hit:[],dead:false};this.state.barriers.push(g);return g.id;}
+  newMovingWall(p:any,ultimate:boolean,d:any){const g={id:this.id(),owner:p.id,x:p.x+d.x*42,y:p.y+d.y*42,dx:d.x,dy:d.y,width:ultimate?250:108,thickness:10,life:3,hp:9999,kind:'moving',active:false,ultimate,damage:(ultimate?48:CHARACTERS.winston.damage)*this.multiplier(p),travel:0,maxTravel:ultimate?680:CHARACTERS.winston.range,speed:ultimate?570:480,hit:[],dead:false};this.state.barriers.push(g);return g.id;}
   attackRayEnd(p:any,d:any,range:number,glass:boolean){const hit=raycast(p,d,this.walls),length=Math.min(range,distance(p,hit));let end={x:p.x+d.x*length,y:p.y+d.y*length};if(glass)for(const g of this.glass){const[a,b]=ends(g),t=raySegment(p,end,a,b);if(t!==null)end={x:p.x+(end.x-p.x)*t,y:p.y+(end.y-p.y)*t};}return end;}
   force(p:any,to:any,duration:number,stun=true){p.motion={from:{x:p.x,y:p.y},to:{x:to.x,y:to.y},duration,elapsed:0};if(stun){p.stun=Math.max(p.stun,duration);this.cancelWindups(p.id);}p.grapple=null;p.dash=0;}
   cancelWindups(owner:number){this.state.attacks=this.state.attacks.filter((a:any)=>a.owner!==owner);this.state.barriers=this.state.barriers.filter((g:any)=>g.owner!==owner||g.kind!=='moving'||g.active);}
@@ -138,7 +138,7 @@ export class Engine {
     else hit=raycast(p,d,this.walls);
     let group:number;
     if(ultimate)group=groupOverride!;
-    else if(p.discGroup!==null){group=p.discGroup;p.discGroup=null;p.cd1=2;}
+    else if(p.discGroup!==null){group=p.discGroup;p.discGroup=null;p.cd1=CHARACTERS.sean.cd1;}
     else{group=this.id();p.discGroup=group;}
     this.state.discs.push({id:this.id(),group,owner:p.id,ultimate,x:p.x,y:p.y,start:{x:p.x,y:p.y},end:{x:hit.x,y:hit.y},face:hit.face,attached:false,speed:2200,hitGlass:[]});
   }
@@ -149,7 +149,7 @@ export class Engine {
   damageGlass(g:any,attackId?:number){if(g.dead)return;if(attackId!==undefined){g.blockedIds??=[];if(g.blockedIds.includes(attackId))return;g.blockedIds.push(attackId);}g.hp--;this.effect('glasshit',g.x,g.y);if(g.hp<=0){g.dead=true;this.effect('shatter',g.x,g.y);}}
   dodge(p:any,key:string|number){const k=`${p.id}:${key}`;if(this.dodges.has(k))return;this.dodges.add(k);p.ult=Math.min(100,p.ult+B.ultimateDodge);this.effect('dodge',p.x,p.y,{owner:p.id});}
   damage(owner:number,target:number,amount:number,key:any,ultimate=false,origin?:any,melee=false){
-    const p=this.state.players[target];if(p.invulnerable>0){this.dodge(p,key);return false;}
+    const p=this.state.players[target];if(p.invulnerable>0&&!ultimate){this.dodge(p,key);return false;}
     if(origin&&melee&&this.blockBetween(origin,p,true,ultimate,Number(key)))return false;
     this.hits.push({owner,target,amount,key,ultimate});return true;
   }
@@ -177,7 +177,7 @@ export class Engine {
     if(s.phase!=='fight')return;
     if(s.stop){s.stop.remaining-=dt;if(s.stop.remaining<=0)this.endStop();}
     if(this.bot)this.botTick(dt);
-    for(const p of s.players){if(this.frozen(p.id))continue;p.localTime+=dt;p.cd1=Math.max(0,p.cd1-dt);p.cd2=Math.max(0,p.cd2-dt);p.stun=Math.max(0,p.stun-dt);p.invulnerable=Math.max(0,p.invulnerable-dt);p.regenWait=Math.max(0,p.regenWait-dt);p.staminaClock+=dt;
+    for(const p of s.players){if(this.frozen(p.id))continue;p.localTime+=dt;p.dashCd=Math.max(0,p.dashCd-dt);p.cd1=Math.max(0,p.cd1-dt);p.cd2=Math.max(0,p.cd2-dt);p.stun=Math.max(0,p.stun-dt);p.invulnerable=Math.max(0,p.invulnerable-dt);p.regenWait=Math.max(0,p.regenWait-dt);p.staminaClock+=dt;
       while(p.staminaClock>=B.staminaTick-1e-9){p.stamina=Math.min(100,p.stamina+B.staminaPerTick*(1+(p.bonus.stamina||0)));p.staminaClock-=B.staminaTick;}
       if(p.regenWait<=0)p.hp=Math.min(p.maxHp,p.hp+B.regenPerSecond*(1+(p.bonus.regen||0))*dt);
       if(p.character==='rian')p.charge=Math.min(10,p.charge+dt);
@@ -191,7 +191,7 @@ export class Engine {
     this.updateAttacks(dt);this.updateProjectiles(dt);this.updateDiscs(dt);this.updateLinks(dt);this.updateBombs(dt);this.updateBarriers(dt);this.resolveHits();
     this.historyClock+=dt;if(this.historyClock>=.05){this.historyClock=0;this.recordHistory();}
   }
-  updateAttacks(dt:number){const s=this.state;for(const a of s.attacks){if(this.frozen(a.owner))continue;a.windup-=dt;if(a.windup>1e-9)continue;a.dead=true;
+  updateAttacks(dt:number){const s=this.state;for(const a of s.attacks){if(this.frozen(a.owner))continue;if(a.followOwner){const owner=s.players[a.owner];a.x=owner.x;a.y=owner.y;}a.windup-=dt;if(a.windup>1e-9)continue;a.dead=true;
       if(a.type==='melee'){const q=s.players[1-a.owner];if(intersectsShape(a,q))this.damage(a.owner,q.id,a.damage,a.id,a.ultimate,a,true);this.effect('slash',a.x,a.y,{owner:a.owner,dx:a.dx,dy:a.dy,radius:a.radius,angle:a.angle});}
       if(a.type==='bullet')s.projectiles.push({id:a.id,owner:a.owner,x:a.x+a.dx*19,y:a.y+a.dy*19,dx:a.dx,dy:a.dy,speed:980,damage:a.damage,remaining:900});
       if(a.type==='wall'){const g=s.barriers.find((g:any)=>g.id===a.barrier);if(g&&!g.dead)g.active=true;}
@@ -208,7 +208,7 @@ export class Engine {
   passGlass(a:any,b:any,projectile:any){for(const g of this.glass){if(g.kind!=='shield'||projectile.hitGlass.includes(g.id))continue;const[e1,e2]=ends(g);if(raySegment(a,b,e1,e2)!==null){projectile.hitGlass.push(g.id);this.damageGlass(g,projectile.id);}}}
   updateDiscs(dt:number){const s=this.state;for(const d of s.discs){if(d.attached||this.frozen(d.owner))continue;const dir=toward(d,d.end),travel=Math.min(distance(d,d.end),d.speed*dt),next={x:d.x+dir.x*travel,y:d.y+dir.y*travel};this.passGlass(d,next,d);d.x=next.x;d.y=next.y;if(distance(d,d.end)<1)d.attached=true;}
     const groups=new Set<number>(s.discs.map((d:any)=>d.group));for(const group of groups){const discs=s.discs.filter((d:any)=>d.group===group),first=discs[0];if(first.linked||!discs.every((d:any)=>d.attached)||discs.length!==(first.ultimate?6:2))continue;
-      discs.forEach((d:any)=>d.linked=true);const lines:any[]=[];for(let i=0;i<discs.length;i++)for(let j=i+1;j<discs.length;j++){if(first.ultimate&&discs[i].face===discs[j].face)continue;lines.push({x:discs[i].x,y:discs[i].y,end:{x:discs[j].x,y:discs[j].y},kind:'line',width:10});}
+      discs.forEach((d:any)=>d.linked=true);const lines:any[]=[];for(let i=0;i<discs.length;i++)for(let j=i+1;j<discs.length;j++){if(first.ultimate&&discs[i].face===discs[j].face)continue;lines.push({x:discs[i].x,y:discs[i].y,end:{x:discs[j].x,y:discs[j].y},kind:'line',width:B.seanLinkWidth});}
       s.links.push({id:this.id(),group,owner:first.owner,ultimate:first.ultimate,lines,windup:.2,life:2,damage:(first.ultimate?15:34)*this.multiplier(s.players[first.owner])});
     }
   }
@@ -231,7 +231,7 @@ export class Engine {
       for(const shield of this.glass){if(shield.id===g.id||shield.kind!=='shield')continue;const [a,b]=ends(g),[c,d]=ends(shield);if(raySegment(a,b,c,d)!==null||circleBarrier(next,8,shield)){if(g.ultimate){shield.dead=true;this.effect('shatter',shield.x,shield.y);}else{this.damageGlass(shield,g.id);g.dead=true;}}}
       if(g.dead)continue;g.x=next.x;g.y=next.y;g.travel+=step;
       const q=s.players[1-g.owner];if(circleBarrier(q,R+step,g)){
-        if(q.invulnerable>0)this.dodge(q,g.id);
+        if(q.invulnerable>0&&!g.ultimate)this.dodge(q,g.id);
         else{if(!g.hit.includes(q.id)){if(this.damage(g.owner,q.id,g.damage,g.id,g.ultimate)){g.hit.push(q.id);}}
           const desired={x:q.x+g.dx*(step+4),y:q.y+g.dy*(step+4)};
           if(!this.walls.some(w=>circleRect(desired,R,w))){q.x=desired.x;q.y=desired.y;}q.stun=Math.max(q.stun,.06);this.cancelWindups(q.id);
@@ -241,16 +241,17 @@ export class Engine {
     }s.barriers=s.barriers.filter((g:any)=>!g.dead);
   }
   updateGrapple(p:any,dt:number){const g=p.grapple;if(!p.held2){p.grapple=null;return;}if(g.stage==='flying'){const dir=toward(g,g.end),travel=Math.min(distance(g,g.end),2000*dt),end={x:g.x+dir.x*travel,y:g.y+dir.y*travel};this.passGlass(g,end,g);g.x=end.x;g.y=end.y;if(distance(g,g.end)<1)g.stage='attached';}
-    else{const dir=toward(p,g.end);if(distance(p,g.end)<R+12){p.grapple=null;return;}const clear=this.move(p,dir.x*p.speed*2*dt,dir.y*p.speed*2*dt);if(!clear)p.grapple=null;}
+    else{const dir=toward(p,g.end);if(distance(p,g.end)<R+12){p.grapple=null;return;}const clear=this.move(p,dir.x*p.speed*B.grappleSpeed*dt,dir.y*p.speed*B.grappleSpeed*dt);if(!clear)p.grapple=null;}
   }
   recordHistory(force=false){if(this.state.phase!=='fight'&&!force)return;const state=copy(this.state);state.effects=[];state.log=[];this.history.push({time:this.state.time,state,frozenView:this.frozenView?copy(this.frozenView):null});while(this.history.length>1&&this.history[0].time<this.state.time-3.3)this.history.shift();}
-  view(i:number){if(this.frozen(i)&&this.frozenView){const snap=copy(this.frozenView);snap.frozen=true;snap.stop={...this.state.stop};snap.phase=this.state.phase;return snap;}return {...copy(this.state),frozen:false};}
+  view(i:number){if(this.frozen(i)&&this.frozenView){const snap=copy(this.frozenView);snap.effects=snap.effects.filter((e:any)=>e.kind!=='contact');snap.effects.push(...copy(this.state.effects.filter((e:any)=>e.kind==='contact')));snap.frozen=true;snap.stop={...this.state.stop};snap.phase=this.state.phase;return snap;}return {...copy(this.state),frozen:false};}
   botTick(dt:number){const s=this.state,p=s.players[1],q=s.players[0];if(this.frozen(1)||p.stun>0)return;this.botClock+=dt;const dist=distance(p,q),dir=toward(p,q),ranged=p.character==='bena'||p.character==='sean',desired=ranged?310:75;
     const side=Math.sin(s.time*1.4),tow=dist>desired?1:dist<desired-50?-.7:0;let mx=dir.x*tow-dir.y*side*.5,my=dir.y*tow+dir.x*side*.5;
     if(!this.canStand({x:p.x+mx*38,y:p.y+my*38})){mx=-dir.y;my=dir.x;if(!this.canStand({x:p.x+mx*38,y:p.y+my*38})){mx=dir.y;my=-dir.x;}}
     const aim=p.character==='sean'?{x:clamp(q.x+Math.cos(s.time*2)*220,20,W-20),y:Math.sin(s.time*2)>0?10:H-10}:q;
     this.input(1,{x:mx,y:my,aimX:aim.x,aimY:aim.y});
     if(this.botClock>.18){this.botClock=0;if(dist<(ranged?700:130))this.command(1,'s1');if(p.cd2<=0&&dist<260)this.command(1,'s2down');if(p.grapple&&distance(p,q)<100)this.command(1,'s2up');if(p.ult>=100&&dist<400)this.command(1,'ult');
-      const threat=s.attacks.some((a:any)=>a.owner===0&&intersectsShape(a,p));if(threat&&p.stamina>=30)this.command(1,'dash');}
+      const threat=s.attacks.some((a:any)=>a.owner===0&&intersectsShape(a,p));if(threat&&p.stamina>=B.dashCost)this.command(1,'dash');}
   }
 }
+
