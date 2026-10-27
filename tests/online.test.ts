@@ -8,12 +8,16 @@ import {matchMaker} from '@colyseus/core';
 const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 async function until(test:()=>boolean,timeout=7000){const start=Date.now();while(!test()){if(Date.now()-start>timeout)throw new Error('Timed out waiting for online state');await delay(25);}}
 test('two real online clients join, select, move, damage, forfeit and save verified results',{timeout:20000},async()=>{
-  process.env.BACKROUND_TEST='1';process.env.ALLOW_GUEST='1';const dataDir=await mkdtemp(path.join(tmpdir(),'backround-'));process.env.DATA_DIR=dataDir;
+  process.env.BACKROUND_TEST='1';process.env.ALLOW_GUEST='1';process.env.CORS_ORIGINS='https://back-round.web.app,https://back-round.firebaseapp.com';const dataDir=await mkdtemp(path.join(tmpdir(),'backround-'));process.env.DATA_DIR=dataDir;
   const {startServer,profiles}=await import('../server/index.ts');const server=await startServer(0);const port=(server.transport as any).server.address().port,url=`http://127.0.0.1:${port}`;const rooms:any[]=[];
   try{
     const guest=async(name:string)=>{const r=await fetch(url+'/api/guest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nickname:name})});return r.json();};
     const a=await guest('테스터 A'),b=await guest('테스터 B'),c=await guest('랜덤 대기');
     const health=await (await fetch(url+'/api/health')).json();assert.equal(health.ok,true);
+    const origin='https://back-round.web.app';
+    const profileCors=await fetch(url+'/api/profile',{headers:{Origin:origin,Authorization:`Bearer ${a.token}`}});assert.equal(profileCors.status,200);assert.equal(profileCors.headers.get('access-control-allow-origin'),origin);
+    const preflight=await fetch(url+'/matchmake/create/private',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type'}});assert.ok(preflight.ok);assert.equal(preflight.headers.get('access-control-allow-origin'),origin);
+    assert.equal((await fetch(url+'/api/profile',{headers:{Origin:'https://unrelated.example',Authorization:`Bearer ${a.token}`}})).status,403);
     const ca=new Client(url),cb=new Client(url),cc=new Client(url);const ra=await ca.create('private',{token:a.token});rooms.push(ra);(matchMaker.getLocalRoomById(ra.roomId) as any).engine.state.mapIndex=0;let av:any,bv:any;ra.onMessage('state',s=>av=s);ra.onMessage('welcome',()=>{});ra.onMessage('saved',()=>{});ra.onMessage('connection',()=>{});
     const queue=await cc.joinOrCreate('match',{token:c.token});rooms.push(queue);queue.onMessage('welcome',()=>{});queue.onMessage('state',()=>{});assert.notEqual(queue.roomId,ra.roomId);
     const rb=await cb.joinById(ra.roomId,{token:b.token});rooms.push(rb);rb.onMessage('state',s=>bv=s);rb.onMessage('welcome',()=>{});rb.onMessage('saved',()=>{});rb.onMessage('connection',()=>{});
@@ -28,3 +32,4 @@ test('two real online clients join, select, move, damage, forfeit and save verif
     const denied=await fetch(url+'/api/profile',{headers:{Authorization:`Bearer ${a.token.slice(0,-2)}XX`}});assert.equal(denied.status,401);
   }finally{for(const r of rooms)try{if(r.connection.isOpen)await r.leave();}catch{}await server.gracefullyShutdown(false);await profiles.queue;await rm(dataDir,{recursive:true,force:true});}
 });
+

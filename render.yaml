@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: back-round-server
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PORT
+        value: "2567"
+      - key: NODE_ENV
+        value: production
+      - key: FIREBASE_PROJECT_ID
+        value: back-round
+      - key: ALLOW_GUEST
+        value: "0"
+      - key: CORS_ORIGINS
+        value: https://back-round.web.app,https://back-round.firebaseapp.com,https://1309-boy.github.io
+      - key: FIREBASE_WEB_CONFIG
+        value: '{"apiKey":"AIzaSyDRmt94FnNdHmtS0zGtTTYmo_QGDSjpXlo","authDomain":"back-round.firebaseapp.com","projectId":"back-round","storageBucket":"back-round.firebasestorage.app","messagingSenderId":"806463714517","appId":"1:806463714517:web:07be500547c5ca9a325e5c"}'
+      - key: FIREBASE_ADMIN_JSON
+        sync: false
